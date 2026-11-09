@@ -41,18 +41,12 @@ jobs:
         run: |
           helm version
 
-      - name: Find Kafka Chart
-        run: |
-          echo "Contenido de la carpeta Kafka:"
-          ls -la kubernetes/parov114/kafka
 
-          echo "Buscando Chart.yaml:"
-          find kubernetes/parov114/kafka -name Chart.yaml
 
       - name: Deploy KAFKA
         run: |
           helm upgrade --install paro-kafka \
-            kubernetes/parov114/kafka \
+            kubernetes/parov114/kafka/kafka \
             -f kubernetes/parov114/kafka/kafka_values_new.yaml \
             --namespace parov114 \
             --create-namespace
