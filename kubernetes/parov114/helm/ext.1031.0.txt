@@ -1,0 +1,153 @@
+NumberOfThreads = 10
+
+;ImgX
+;Crop,target,width,height,bg,algorithm
+;bg        = background color ( 0..255 = background value
+;                                   -1 = auto)
+;algorithm = crop algorithm   ( 0..3   = Type1,2,3,4
+;                               4..7   = variable Type1,2,3,4 (width and height means max size) )
+;
+;MagM,target,ratio,width,height,bg,algorithm
+;    (MagM crops image after magnificating)
+;
+;input image (Img0 is the input image, so no command is effective.)
+ImageMax       = 2
+Img0           = input image
+Img1           = Crop,0,512,512,-1,1
+
+;image type (0=roll/1=slap/2=palm/3=latent(f)/4=latent(p)
+ImageType      =   0
+
+;image enhancement settings
+;n =none
+;r =density reverse
+;g =gaussian filter
+;c =global contrast enhancement
+;c1=1
+;c2=c1 with foreground
+;l =global and local contrast enhancement
+;l1=l
+;l2=l1 with foreground
+;e =noise boundary recognizing enhancement for tenprint
+;a =adaptive stretch
+;p =periodic noise removal
+;p1=p
+;p2=e + black/white noise removal
+;   note) black/white noise removal requests pre-enhanced image.
+;p3=h + black/white noise removal
+;p4=l + black/white noise removal
+;s1=global stretch
+;s2=global stretch with foreground
+;s3=local stretch
+;f =adaptive gaussian filter
+;f1=f
+;f2=adaptive gaussian filter with foreground
+;
+;each line can have 6 items, and it must be csv format.
+FeEnhanceMax   =   1
+
+FeEnhance0     =   n
+
+;trimming and ridge enhncement
+;param1 I=IAC
+;   param2 0=raw image analysis/1=enhanced image analysis)
+;   param3 0=for wide/1=narrow
+;   param4 1=not removes noise/2=removes noise
+;   param5 1=high resolution direction/2=low resolution direction
+;   param6 1=ridge enhance/2=not
+;param1 Y=Ytrm
+;   param2 0=original mode/1=advanced mode
+;param1 N=not effective
+
+LatentParamMax =  1
+LatentParam0   = N
+
+;feature extraxtion setting
+;param1=Img0
+;param2=image enhancement id before latent image processing (FeEnhance?)
+;param3=latent image processing id (LatentParam?)
+;param4=image enhancement id after latent image processing (FeEnhance?)
+;param5=fe mode (
+;                 0=Original,
+;1.0 pass extraction
+;                 1=FFT,      2=TypeB',  3=TypeE',  4=TypeP',
+;2.0 pass extraction
+;                 5=TypeK.    9=TypeFE,  10=TypeBF,
+;3.0 pass extraction
+;                11=TypeFIE, 12=TypeFYE,
+;2.5 pass extraction
+;                13=TypeFDE
+;               )
+;       +128 -> with detecting foreground by density analysis
+;       +256 -> with detecting foreground by density analysis (Alg NS)
+;param6=limit of output minutia
+;param7=minutia format (  0=pc2,
+;                       100=pc2 without R1, V1
+;                         1=bt5,
+;                        10=pc3,
+;                        11=mu,
+;                        12=pzip)
+;param8=minutia pruning method (0=distance from fingerprint's center
+;                               1=reliability
+;                               2=distance from minutiae's center)
+;param9=axis_direction_thresh
+;paramA=qq_thresh
+
+MinutiaMax     =   1
+Minutia0       = 1,0,0,0, 37,  80, 0,2,32,80
+
+;list of removing minutiae id after extracting
+;RemoveMinutia  = 0,1,2,3,4,5,6,7
+
+;keeps entropy values
+Entropy        =   1
+
+;generates macro feature record
+MacroFeature   =   0,0,0
+
+;executes pattern classification
+PatternType    =   0
+
+;template recovering
+MinutiaRecover =   0,10
+
+;for 1st minutia pruning by confidence base
+MinutiaLimitEx =  80
+
+;
+TypeKOptions   = 100
+
+;
+DPMatchTolerance                 = 12.0
+Relation8AsFMatch                =  0
+MinutiaQualityAsFMatch           =  0
+RemoveWeakMinutia                =  1
+AxisQualityAsFMatch              =  0
+AvoidZoneClipInPCx               =  0
+MinutiaeOrderByDistanceFromAAxis =  1
+MinutiaeOrderByReliability       =  0
+
+;DeepFingerprintRecognition = img index, dfr algorithm, dic dir, numlocal(1or5or9)
+DeepFingerprintRecognition = 1,V1.6,./model/finger/dfr/,1
+
+;DeepCoreDetection = dcd algorithm, dic dir, dcd threshold
+DeepCoreDetection = V1.0,./model/finger/dcd/,20
+
+DFR_Max = 1
+DeepFingerprintRecognition00 = 1
+;HT does not support rotation. fix 0.
+DFRTolerance = 0
+;----
+HT_LMNetModel       =   ./model/finger/lmnet1.100.h2, 0
+HT_LMNetConfig      =   0, 0, 30, -1
+HT_TMNetModel       =   ./model/finger/tmnet2.500.h2, 1
+HT_TMNetConfig      =   0, 0, 12, 12
+HT_EntropyIndex     =   0
+HT_TargetIndex      =   0
+HT_MinutiaeLimit    =  63, 63
+
+;----
+
+
+;DeepProphet = img index
+;DeepProphet = 1

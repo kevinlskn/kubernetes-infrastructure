@@ -1,0 +1,67 @@
+# -- Number of pods in TOTP server.
+replicaCount: 2
+
+image:
+  # -- TOTP server container image registry.
+  registry: docker.neclatam-cloud.com
+  # -- TOTP server container image repository.
+  repository: bms/v1.14_ga/nf-totp
+  # -- TOTP server container image tag.
+  tag: 2.2.6
+
+# -- TOTP server container image pull policy.
+imagePullPolicy: Always
+
+imagePullSecret:
+  # -- Image pull secret name for pulling TOTP server container image.
+  name: totp-regcred
+  registryCredential:
+    # -- Private container registry username for pulling TOTP server container image.
+    username: delivery-latam
+    # -- Private container registry password for pulling TOTP server container image.
+    password: bsBh6zeM-BrPd9hCBbvD_LRW
+
+# -- TOTP server container node selector.
+nodeSelector: {}
+
+# -- TOTP server container tolerations.
+tolerations: []
+
+# -- Enable https server or not.
+httpsEnabled: true
+
+# -- TOTP server container resource requests and limits.
+resources:
+  requests:
+    memory: 50Mi
+
+# -- TOTP server container startup probe.
+startupProbe: {}
+
+# -- TOTP server container liveness probe.
+livenessProbe:
+  httpGet:
+    scheme: HTTPS
+    port: 8080
+    path: /neofacegl/v1/totp
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- TOTP server container readiness probe.
+readinessProbe:
+  httpGet:
+    scheme: HTTPS
+    port: 8080
+    path: /neofacegl/v1/totp
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- TOTP server container lifecycle hook.
+lifecycle: {}
+

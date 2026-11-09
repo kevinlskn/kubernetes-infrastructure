@@ -1,0 +1,105 @@
+
+name: Deploy parov114 to OKE
+
+'on':
+  push:
+    branches:
+      - main
+    paths:
+      - "kubernetes/parov114/**"
+      - ".github/workflows/deploy-oke.yaml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-parov114-oke
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy parov114
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Kubernetes connection
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+
+      - name: Verify Helm
+        run: |
+          helm version
+
+      - name: Deploy KAFKA
+        run: |
+          helm install paro-kafka \
+            kubernetes/parov114/kafka \
+            -f kubernetes/parov114/kafka/kafka_values_new.yaml \
+            --namespace parov114 \
+            --create-namespace
+
+      # DESPLIEGUE KUSTOMIZE
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl kustomize kubernetes/parov114
+          kubectl apply -k kubernetes/parov114
+
+
+      - name: Deploy NDP Cache Server
+        run: |
+          helm upgrade --install ndp-cache-server-v114 \
+            kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/ndp-cache-server-1.4.0.tgz \
+            -f kubernetes/parov114/helm/ndp-cache-server_values.yaml \
+            --namespace ndp-cache-serverv114 \
+            --create-namespace
+
+      - name: Deploy License server
+        run: |
+          helm upgrade --install license-server-v114 \
+            kubernetes/parov114/helm/license-server-v2.0.2/helm/license-server-2.0.2.tgz \
+            -f kubernetes/parov114/helm/license-server_values.yaml \
+            --namespace license-serverv114 \
+            --create-namespace
+
+      - name: Deploy totp
+        run: |
+          helm upgrade --install totp-v114 \
+            kubernetes/parov114/helm/totp-v2.2.6/helm/totp-2.2.6.tgz \
+            -f kubernetes/parov114/helm/totp_values.yaml \
+            --namespace totpv114 \
+            --create-namespace
+
+      - name: Deploy paro
+        run: |
+          helm upgrade --install paro-v114 \
+            kubernetes/parov114/helm/paro-v1.14.0/helm/paro-1.22.0.tgz \
+            -f kubernetes/parov114/helm/paro_values.yaml \
+            --set-file htExtractFingerTenprint=kubernetes/parov114/helm/ext.1031.0.txt
+            --namespace parov114 \
+            --create-namespace
+
+      - name: Deploy txnmgr
+        run: |
+          helm upgrade --install txnmgr-v114 \
+            kubernetes/parov114/helm/txnmgr-v1.14.0/helm/txnmgr-1.22.0.tgz \
+            -f kubernetes/parov114/helm/txnmgr_values.yaml \
+            --namespace txnmgrv114 \
+            --create-namespace
+
+
+      # VERIFICACIÓN
+      - name: Show deployment status
+        run: |
+          kubectl get deployments,statefulsets,services -A
+          helm list -n ndp-cache-serverv114

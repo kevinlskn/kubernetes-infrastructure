@@ -1,0 +1,1108 @@
+image:
+  # -- Paro container image registry.
+  registry: docker.neclatam-cloud.com
+  manager:
+    # -- Paro manager container image repository.
+    repository: bms/v1.14_ga/paro/paro-manager
+    # -- Paro manager container image tag.
+    tag: 1.14.0.release-1.14.0.1912fb50b985adf72f1e35d56991b1dfb50ec0a9
+    # -- Paro manager container image pull policy.
+    pullPolicy: Always
+  managerLiquibase:
+    # -- Paro manager liquibase container image repository.
+    repository: bms/v1.14_ga/paro/paro-manager-liquibase
+    # -- Paro manager liquibase container image tag.
+    tag: 1.14.0.release-1.14.0.1912fb50b985adf72f1e35d56991b1dfb50ec0a9
+    # -- Paro manager liquibase container image pull policy.
+    pullPolicy: Always
+  worker:
+    # -- Paro worker container image repository.
+    repository: bms/v1.14_ga/paro/paro-worker
+    livenessrepository: idrnd
+    padimage: idface-server-all-prod
+    iadimage: iad-server-prod
+    # -- Paro worker container image tag.
+    tag:
+      dataset: 1.14.0.dataset.release-1.14.0.4062ee4fc9
+      face: 1.14.0.face.nfv7.release-1.14.0.4062ee4fc9
+      iris: 1.14.0.iris.niris6.release-1.14.0.4062ee4fc9
+      fingerpalm: 1.14.0.fingerpalm.fpinc.release-1.14.0.4062ee4fc9
+      tattoo: 1.0.6.tattooextract
+      vectorsearch: 1.14.0.vectorsearch
+      pad: 1.50.7
+      iad: 2.5.3
+    # -- Paro worker container image pull policy.
+    pullPolicy: Always
+  etlsidecar:
+    # -- Etlsidecar container image repository.
+    repository: etlsidecar
+    # -- Etlsidecar container image tag.
+    tag: 1.14.0
+
+imagePullSecret:
+  # -- Image pull secret name for pulling paro container images.
+  name: paro-regcred
+  registryCredential:
+    # -- Private container registry username for pulling paro container images.
+    username: delivery-latam
+    # -- Private container registry password for pulling paro container images.
+    password: bsBh6zeM-BrPd9hCBbvD_LRW
+
+manager:
+  # -- Number of pods in paro manager.
+  replicaCount: 2
+  # -- DR (Disaster Recovery) mode configuration.
+  # When enabled, this instance operates as a DR site with write operations disabled.
+  drMode:
+    # -- Enable DR mode. When true, the dr-mode Spring profile is activated,
+    # disabling write operations (enrollment, update, delete) while allowing
+    # read operations (search, verify, extract).
+    enabled: false
+  # -- Node label for paro manager pod assignment.
+  nodeSelector:
+    kubernetes.io/os: linux
+  # -- Node tolerations for paro manager
+  tolerations: []
+  # -- Dataset readiness delay in milliseconds.
+  datasetReadinessDelayMilli: 60000
+  security:
+    # -- Enable https on paro manager server (Tomcat REST API and worker-to-manager callbacks).
+    # Note: gRPC server SSL is controlled separately by worker.disableHttps.
+    requireSsl: true
+  # -- JVM options passed to paro manager.
+  jvmOptions:
+    - -Xms4g
+    - -Xmx4g
+    - -Dio.netty.handler.ssl.noOpenSsl=true
+    - -Dio.grpc.netty.shaded.io.netty.handler.ssl.noOpenSsl=true
+    - -Dmanagement.endpoint.prometheus.enabled=true
+    - -Dmanagement.metrics.export.simple.enabled=true
+    - -Dmanagement.endpoints.web.exposure.include=health,info,prometheus,metrics
+    - -XX:-OmitStackTraceInFastThrow
+    - -Djava.security.egd=file:/dev/./urandom
+  # -- Paro manager container resource requests and limits.
+  resources:
+    requests:
+      cpu: 4000m
+      memory: 5000Mi
+  # -- Max payload size in MB.
+  maxPayloadSizeMB: 80
+  failEnrollmentOnLivenessFailure: false
+  # -- Paro manager container startup probe.
+  startupProbe:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - ps -ef | grep java | grep -v grep
+    failureThreshold: 6
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 3
+  # -- Paro manager container liveness probe.
+  livenessProbe:
+    httpGet:
+      scheme: HTTPS
+      port: 8080
+      path: /paro/v1/info/manager
+    failureThreshold: 3
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 3
+  # -- Paro manager container readiness probe.
+  readinessProbe:
+    httpGet:
+      scheme: HTTPS
+      port: 8080
+      path: /paro/v1/info/manager
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 3
+    successThreshold: 1
+    failureThreshold: 3
+  # -- Paro manager container lifecycle hook.
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - echo preStop called; sleep 30; echo preStop done
+  # -- Kubernetes service DNS of NDP Cache Server (Hazelcast cluster).
+  # Ref: https://docs.hazelcast.com/hazelcast/latest/deploy/configuring-kubernetes#using-kubernetes-in-dns-lookup-mode
+  ndpCacheServerServiceDns: ndp-cache-server.ndp-cache-serverv114.svc.cluster.local
+  # -- Prefix of hazelcast objects.
+  hazelcastObjectPrefix: paro
+  # -- Send search request contains multiple datasets from manager to worker or not.
+  multiDatasetSearchFlag: false
+  # -- Maximum concurrency of sending dataset search requests from the manager to the workers.
+  # To minimize the search response time, this value should be greater than or equal to
+  # the maximum number of datasets to search simultaneously.
+  # If Paro's resources are limited, please set a smaller value.
+  # Please note that this may increase the search response time.
+  searchDatasetsMaxConcurrency: 300
+  # -- Enable to retrieve only success of Search API results.
+  # Unavailable Datasets/Bins can be excluded from the matching process.
+  # Additionally, the results of matching targets including error can be excluded.
+  # Note: Setting this value to true is not recommended, because it causes false negative.
+  skipNotReadyDatasets: false
+  # -- Environment variables to be added to paro manager.
+  # Only add environment variables that are not supported by this chart.
+  extraEnvs: []
+  # extraEnvs:
+  #  - name: FOO
+  #    value: "BAR"
+  # -- Leader election configuration (Spring Cloud Kubernetes)
+  leaderElection:
+    # -- Update period in milliseconds
+    updatePeriod: 30000
+    # -- Publish failed events
+    publishFailedEvents: true
+  # -- Kubernetes client timeout settings
+  kubernetes:
+    client:
+      # -- TCP + TLS handshake timeout in milliseconds
+      connectionTimeoutMs: 10000
+      # -- Overall request timeout in milliseconds (covers socket read)
+      requestTimeoutMs: 120000
+      # -- Service-level timeout for all KubernetesService methods in seconds (via @TimeLimiter).
+      # Inner operation timeouts (e.g., K8s API list) are derived as 95% of this value.
+      timeLimiterTimeoutSeconds: 180
+  # -- Enable worker or not. `manager.workerEnabled.dataset` should be set to `true` when `kafka.enabled` is `true`.
+  workerEnabled:
+    dataset: true
+    face: true
+    iris: false
+    fingerpalm: true
+    vector: false
+    tattoo: false
+    pad: false
+    iad: false
+  algorithmMap:
+      # -- AlgorithmVersion and workerVersion mapping.
+      algorithmWorkerMapping:
+        face:
+          nfv4: nfv4
+          nfv5: nfv5
+          nfv6: nfv6
+          nfv7: nfv7
+          nfv8: nfv8
+        iris:
+          niris3: niris3
+          niris4: niris4
+          niris5: niris5
+          niris6: niris6
+        fingerpalm:
+          FPINC202506: fpinc
+          FPINC202603: fpinc202603
+        vector:
+          vector1: vector1
+      # -- Extract workers and algorithms mapping.
+      # Specify extract worker versions to deploy for each modality.
+      extractModalityConfig:
+        face: [nfv7]
+        iris: [niris6]
+        fingerpalm: [fpinc]
+        vector: [vector1]
+      # -- Default settings for DFR algorithm
+      dfrParamsConfig:
+        # -- Default finger DFR regions. Possible values are `1`, `5`, `9`.
+        # If not specified, the default value is `1`.
+        fingerRegions: 1
+        # -- Default template memory mode, possible values are `all`, `dfr`.
+        # `all` means that all templates are loaded into memory, `dfr` means that only DFR templates are loaded into memory.
+        templateMemoryMode: all
+      # -- Default settings for DPR algorithm
+      dprParamsConfig:
+        # -- Default template memory mode, possible values are `all`, `dpr`.
+        # `all` means that all templates are loaded into memory, `dpr` means that only DPR templates are loaded into memory.
+        templateMemoryMode: all
+      # -- Data type and algorithms mapping.
+      dataTypeConfigMap:
+        face:
+          defaultAlgorithmVersion: nfv7
+          algorithmVersions:
+            - algorithmVersion: nfv4
+              algorithmConfigs:
+                - algorithm: nf
+                  templateSize: 1513
+                  matchesPerSecond: 1600000
+            - algorithmVersion: nfv6
+              algorithmConfigs:
+                - algorithm: nf
+                  templateSize: 1365
+                  matchesPerSecond: 1600000
+            - algorithmVersion: nfv7
+              algorithmConfigs:
+                - algorithm: nf
+                  templateSize: 1365
+                  matchesPerSecond: 1600000
+            - algorithmVersion: nfv8
+              algorithmConfigs:
+                - algorithm: nf
+                  templateSize: 1445
+                  matchesPerSecond: 1600000
+        iris:
+          defaultAlgorithmVersion: niris5
+          algorithmVersions:
+            - algorithmVersion: niris5
+              algorithmConfigs:
+                - algorithm: niris
+                  templateSize: 4776
+                  matchesPerSecond: 350000
+            - algorithmVersion: niris6
+              algorithmConfigs:
+                - algorithm: niris
+                  templateSize: 4776
+                  matchesPerSecond: 350000
+        # -- Default settings for FingerPalm extraction algorithm
+        fingerpalm:
+          defaultAlgorithmVersion: FPINC202506
+        # -- Default settings for FingerPalm bin/dataset creation algorithm versions and their configurations
+        finger_ht:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: ht
+                  templateSize: 8368
+                  matchesPerSecond: 800000
+        finger_lfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 10523
+                  matchesPerSecond: 8000
+                - algorithm: dfr
+                  templateSize: 3033
+                  matchesPerSecond: 8000
+        finger_elfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: elfml
+                  templateSize: 181000
+                  matchesPerSecond: 8000
+                - algorithm: dfr
+                  templateSize: 2960
+                  matchesPerSecond: 8000
+        latent_finger_lfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 5173
+                  matchesPerSecond: 8000
+                - algorithm: dfr
+                  templateSize: 1204
+                  matchesPerSecond: 8000
+        latent_finger_elfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: elfml
+                  templateSize: 111000
+                  matchesPerSecond: 8000
+                - algorithm: dfr
+                  templateSize: 1776
+                  matchesPerSecond: 8000
+        palm_lfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 311064
+                  matchesPerSecond: 745
+            - algorithmVersion: FPINC202603
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 134776
+                  matchesPerSecond: 200
+                - algorithm: dpr
+                  templateSize: 63520
+                  matchesPerSecond: 6000
+        latent_palm_lfml:
+          defaultAlgorithmVersion: FPINC202506
+          algorithmVersions:
+            - algorithmVersion: FPINC202506
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 195038
+                  matchesPerSecond: 745
+            - algorithmVersion: FPINC202603
+              algorithmConfigs:
+                - algorithm: lfml
+                  templateSize: 113037
+                  matchesPerSecond: 200
+                - algorithm: dpr
+                  templateSize: 51384
+                  matchesPerSecond: 6000
+        vector:
+          defaultAlgorithmVersion: vector1
+          algorithmVersions:
+            - algorithmVersion: vector1
+              algorithmConfigs:
+                - algorithm: vector
+                  # -- Template size for vector datatype is set to 0 as it is independent and not tied to modalities like other datatypes.
+                  # The template size from create bin/dataset will be used.
+                  templateSize: 0
+                  matchesPerSecond: 1000000
+
+  workerRetry:
+    # -- HTTP connection retry count for requests from manager to worker
+    count: 0
+    # -- HTTP connection retry initial interval for requests from manager to worker
+    intervalMilli: 1000
+  workerTimeout:
+    # -- Validate timeout milliseconds for requests from manager to worker.
+    validate: 360000
+    # -- Verify timeout milliseconds for requests from manager to worker.
+    verify: 360000
+    # -- Extract timeout milliseconds for requests from manager to worker.
+    extract: 360000
+    # -- Search timeout milliseconds for requests from manager to worker.
+    search: 360000
+    # -- Convert timeout milliseconds for requests from manager to worker.
+    convert: 360000
+    # -- Check liveness timeout milliseconds for requests from manager to worker.
+    checkLiveness: 360000
+    # -- IAD extract image timeout milliseconds for requests from manager to worker.
+    iadExtract: 360000
+  workerKeepAlive:
+    # -- Enable Keep-Alive for requests from manager to worker.
+    # Ref: https://datatracker.ietf.org/doc/html/rfc7230#appendix-A.1.2
+    enabled: true
+  sslHandshakeTimeout:
+    # -- SSL handshake timeout in milliseconds for HTTPS connections from manager to worker.
+    # Should be set to positive integer.
+    # Default to 10000 (10 seconds).
+    timeoutMilli: 10000
+  multimodal:
+    # -- Normal face correction table score conversion file path.
+    faceNormalCorrectionTable: /opt/nec/paro/mm/conf/score_vs_logFAR_face_normal.csv
+    # -- Mask face correction table score conversion file path.
+    faceMaskCorrectionTable: /opt/nec/paro/mm/conf/score_vs_logFAR_face_mask.csv
+    # -- Iris correction table score conversion file path.
+    irisCorrectionTable: /opt/nec/paro/mm/conf/score_vs_logFAR_iris.csv
+    # -- Integration Similarity Threshold.
+    integrationSimilarityThreshold: 126000
+    # -- Face search score Threshold.
+    faceSimilarityThreshold: 0
+    # -- Mask Face search score Threshold.
+    faceMaskSimilarityThreshold: 0
+    # -- Iris search score Threshold.
+    irisSimilarityThreshold: 0
+    # -- Iris search mode.(0: speed, 1:middle, 2: accuracy)
+    irisMatchSpeed: 1
+    # -- Iris allowable angle [degree].
+    irisRotation: 15
+    # -- Face search Max person count.
+    faceMaxPersonCount: 3
+    # -- Iris search Max person count.
+    irisMaxPersonCount: 3
+    # -- Face search score filter value.
+    faceScoreFilterValue: 0
+    # -- Transaction Keep Time [sec].
+    transactionKeepTime: 180
+  connectionPool:
+    # -- The maximum number of connections (per connection pool) before start pending.
+    # Should be set to positive integer.
+    # Default to 500.
+    maxConnections: 500
+    # -- The maximum number of extra attempts at acquiring a connection to keep in a pending queue for requests from manager to worker.
+    # Should be set to positive integer or -1.
+    # Default to 1000. If -1 is specified, the pending queue does not have upper limit.
+    pendingAcquireMaxCount: 1000
+    # -- The maximum duration in milliseconds to wait for a pending connection acquisition attempt before a timeout.
+    # Should be set to positive integer or -1.
+    # Default to 45000 ms. If -1 is specified, the pending acquire timeout does not have upper limit.
+    pendingAcquireTimeoutMilli: 45000
+    # -- The maximum time in milliseconds allowed for reading data after the connection is established.
+    # Should be set to positive integer.
+    # Default to 120000.
+    readTimeoutMilli: 120000
+    # -- The maximum lifetime of a connection in milliseconds. Connections older than this will be closed.
+    # Should be set to positive integer.
+    # Default to 180000 (3 minutes).
+    maxLifeTimeMilli: 180000
+    # -- The maximum idle time of a connection in milliseconds. Connections idle longer than this will be closed.
+    # Should be set to positive integer.
+    # Default to 60000 (1 minute).
+    maxIdleTimeMilli: 60000
+    # -- Enable periodic background eviction of idle/stale connections.
+    # Default to true.
+    evictInBackground: true
+    # -- The interval in milliseconds to check and dispose the connection pool inactivity.
+    # Default to 60000 (1 minute).
+    disposeIntervalMilli: 60000
+    # -- The duration in seconds after which an empty pool with no recorded interactions is considered inactive.
+    # Default to 60 (1 minute).
+    poolInactivitySeconds: 60
+    # -- Enable Reactor Netty connection-pool metrics (reactor_netty_connection_provider_* gauges on the Prometheus endpoint).
+    # Off by default; enable only for performance/diagnostic runs.
+    # Default to false.
+    metricsEnabled: false
+    # -- The socket send buffer size in bytes for Netty TCP connections to workers.
+    # Controls the OS-level send buffer (SO_SNDBUF). Larger values improve throughput
+    # for large payloads (e.g., tenprint extraction) by reducing write syscalls.
+    # Default to 1048576 (1 MB).
+    socketSendBufferBytes: "1048576"
+    # -- The low water mark in bytes for Netty write buffer. When the write buffer drops
+    # below this threshold, the channel becomes writable again.
+    # Default to 524288 (512 KB).
+    writeBufferLowWaterMark: "524288"
+    # -- The high water mark in bytes for Netty write buffer. When the write buffer exceeds
+    # this threshold, the channel becomes unwritable until it drains below the low water mark.
+    # Default to 1048576 (1 MB).
+    writeBufferHighWaterMark: "1048576"
+  offsetId:
+    # -- The maximum time to wait for the lock in milliseconds when enrolled offset ids.
+    enrollOffsetIdLockWaitMilli: 5000
+    # -- The maximum time to wait for the lock in milliseconds when prefetched offset ids.
+    prefetchOffsetIdLockWaitMilli: 5000
+    # -- The number of offset ids to prefetch for dataset or bin.
+    preFetchOffsetIdCount: 1000
+  grpc:
+    # -- The port number of the gRPC server
+    port: 9090
+    # -- The maximum message size allowed to be received on the gRPC server and the gRPC consumer.
+    # If a value less than or equal to zero is specified, it defaults to 100MB.
+    maxInboundMessageSizeMB: 100
+    # -- The maximum connection age, connections lasting longer than which will be gracefully terminated.
+    # If a value less than or equal to zero specified, it is treated as infinity.
+    maxConnectionAgeSecs: -1
+    # -- The maximum connection idle time, connections being idle for longer than which will be gracefully terminated.
+    # If a value less than or equal to zero is specified, it is treated as infinity.
+    maxConnectionIdleSecs: 500
+  # -- The interval in minutes to check and delete expired person events.
+  # If the value is less than or equal to 0, the delete expired persons check will not be performed.
+  deleteExpiredPersonEventsIntervalMins: 10
+  # -- The interval in seconds to update the cache of Bin, Dataset and server information.
+  # If the status of Bin, Dataset or server information is updated, The cache is updated without waiting for the interval.
+  cacheReloadIntervalSecs: 60
+  # -- DCM (Dataset Control Message) Kafka send configuration.
+  # Controls periodic and version-delta based DCM sending to prevent stale worker sync after restarts.
+  datasetControl:
+    # -- Interval in minutes to periodically send DCM to Kafka regardless of changes.
+    # Set to 0 to disable periodic sending.
+    periodicSendIntervalMins: 60
+    # -- Version delta threshold: DCM is re-sent when any dataset's version crosses a multiple of this value.
+    # Set to 0 to disable version-delta based sending.
+    versionDeltaThreshold: 5000
+    # -- Upper bound (seconds) for blocking on the synchronous KafkaProducer send of a DCM.
+    # Acts as the application-level safety net so a hung broker cannot starve the scheduled
+    # DCM sender thread. Should be greater than the Kafka producer's `delivery.timeout.ms`
+    # (default 120s); 125 leaves a 5s buffer.
+    sendTimeoutSecs: 125
+  purgedataset:
+    # -- The maximum records to fetch while purging dataset.
+    fetchSize: 10000
+    # -- The maximum records to purge in one transaction while purging dataset.
+    batchSize: 600
+    # -- The maximum iterations to check for records in one cycle while purging dataset.
+    iterationsPerBatch: 10
+  # -- The maximum number of parsons to fetch.
+  fetchMaxPersons: 10000
+  # -- The maximum number of enrollments to sync per batch.
+  syncEnrollmentsBatchSize: 500
+  # -- Data sync version-gap guard: time in ms to hold back a record that sits after a version gap before syncing past the gap. 0 or less disables the guard and syncs all records regardless of gaps. Safe to disable because batch enrollment locks the bin/dataset row, so a missing lower version is a slot vacated by an update/delete, never an in-flight commit.
+  syncCommitTimeDiffMilli: 5000
+
+managerLiquibase:
+  # -- Paro manager liquibase container resource requests and limits.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+
+worker:
+  # -- Enable core dump generation in worker containers or not.
+  enableCoreDump: false
+  grpc:
+    # -- Polling interval in milliseconds for the worker to poll the gRPC server.
+    pollingIntervalMilli: 5000
+  # -- Indicates what workers should use network license.
+  networkLicenseEnabled:
+    nfv4: false
+    nfv5: false
+    nfv6: false
+    nfv7: false
+    nfv8: false
+    niris3: false
+    niris4: false
+    niris5: true
+    niris6: false
+    fingerPalm: false
+  # -- IP address of the network license server.
+  networkLicenseServerIP: "127.0.0.1"
+  # -- Disable or enable https for communication between paro manager and paro worker.
+  disableHttps: false
+  # -- Node label for paro worker pod assignment.
+  nodeSelector:
+    key: kubernetes.io/os
+    val: linux
+  datasetworker:
+    # -- Node label for dataset worker pod assignment.
+    nodeSelector:
+      key: kubernetes.io/os
+      val: linux
+    # -- Number of pods in dataset worker.
+    replicaCount: 2
+    # -- Used to calculate the number of http threads generated by dataset worker.
+    # Formula: `max(maxCpu * httpThreadCountCpuFactor, 1)`
+    httpThreadCountCpuFactor: 1
+    # -- Maximum number of queued http connection generated by dataset worker.
+    httpConnectionCount: 64
+    resources:
+      requests:
+        # -- (float) Dataset worker cpu resource request [cores].
+        cpu: 1
+        # -- (float) Dataset worker memory resource request [GiB].
+        memory: 3
+      limits:
+        # -- (float) Dataset worker cpu resource limit [cores].
+        cpu: 1
+        # -- (float) Dataset worker memory resource limit [GiB].
+        memory: 5
+    pvc:
+      # -- Minimum amount of storage size of persistent volume of dataset worker.
+      storage: 100Gi
+      # -- The name of the StorageClass required by the claim of dataset worker.
+      storageClassName: oci-bv
+    # -- Node taints for datasetworker pods to tolerate
+    tolerations: []
+    # -- Afiniities for worker pods
+    affinity: {}
+  extract:
+    # -- Node label for extract worker pod assignment.
+    nodeSelector:
+      key: kubernetes.io/os
+      val: linux
+    # -- Termination grace period
+    terminationGracePeriodSeconds: 90
+    autoscaling:
+      # -- Minimum number of pods in extract worker.
+      minReplicaCount:
+        face: 1
+        iris: 1
+        fingerpalm: 3
+        tattoo: 1
+      # -- Maximum number of pods in extract worker.
+      maxReplicaCount:
+        face: 1
+        iris: 1
+        fingerpalm: 3
+        tattoo: 1
+      # -- Target average CPU utilization (represented as a percentage of requested CPU) over all the extract worker pods.
+      targetCPUUtilizationPercentage:
+        face: 70
+        iris: 70
+        fingerpalm: 70
+        tattoo: 70
+    # -- Used to calculate the number of extract threads generated by extract worker.
+    # Formula: `max(maxCpu * extractThreadCountCpuFactor, 1)`
+    extractThreadCountCpuFactor:
+      face: 1
+      iris: 1
+      fingerpalm:
+        finger: 1
+        palm: 0.24
+      tattoo: 1
+    # -- Used to calculate the number of http threads generated by extract worker.
+    # Formula: `max(maxCpu * httpThreadCountCpuFactor, 1)`
+    httpThreadCountCpuFactor:
+      face: 1
+      iris: 1
+      fingerpalm: 1
+      tattoo: 1
+    # -- Maximum number of queued http connection generated by extract worker.
+    httpConnectionCount:
+      face: 64
+      iris: 64
+      fingerpalm: 64
+    asyncResponder:
+      # -- Number of async responder threads generated by extract worker.
+      threadCount:
+        face: 2
+        iris: 2
+        fingerpalm: 2
+    resources:
+      requests:
+        # -- Extract worker cpu resource request [cores].
+        cpu:
+          face: 6
+          iris: 1
+          fingerpalm: 18
+          tattoo: 1
+        # -- Extract worker memory resource request [GiB].
+        memory:
+          face: 16
+          iris: 1
+          fingerpalm: 32
+          tattoo: 1
+      limits:
+        # -- Extract worker cpu resource limit [cores].
+        cpu:
+          face: 6
+          iris: 1
+          fingerpalm: 18
+          tattoo: 1
+        # -- Extract worker memory resource limit [GiB].
+        memory:
+          face: 16
+          iris: 1
+          fingerpalm: 32
+          tattoo: 1
+    # -- Whether requested minimum and maximum eye distance values are reduced accordingly to factor by which large face image is scaled down in face template extraction.
+    # Paro scales down large face image internally, so true is the correct behavior, but false is also possible for compatibility.
+    enableEyeDistanceAutoScaling: true
+    # -- Node taints for extract worker pods to tolerate
+    tolerations: []
+    # -- Afiniities for extract worker pods
+    affinity: {}
+  search:
+    # -- Node label for search worker pod assignment.
+    nodeSelector:
+      key: kubernetes.io/os
+      val: linux
+    # -- CPU factor used to calculate the number of http threads generated by search worker.
+    # Specify an integer value between 1 and 4 (inclusive).
+    # The constraint `http_thread_count <= max_cores * 4` is not applied to this parameter.
+    # Therefore, configure this value so that the calculated http_thread_count does not exceed that constraint.
+    # Formula: `max(maxCpu * httpThreadCountCpuFactor, 1)`
+    httpThreadCountCpuFactor:
+      face: 1
+      iris: 1
+      fingerpalm: 1
+      vector: 1
+    # -- Maximum number of queued http connections generated by search worker.
+    # Specify an integer value greater than or equal to 1.
+    httpConnectionCount:
+      face: 64
+      iris: 64
+      fingerpalm: 64
+      vector: 64
+    # -- Percentage of ram space allocated to non-biometric events in bin search worker pod.
+    # This value is used to calculate the number of pods in bin search worker.
+    ramOverheadPercentagePerWorker:
+      face: 55
+      iris: 61
+      fingerpalm: 8
+      vector: 61
+    # -- Percentage of cpu overhead allocated to non-biometric processing in bin search worker pod.
+    # This value is used to reduce effective matches-per-second when calculating resource requirements.
+    cpuOverheadPercentagePerWorker:
+      face: 5
+      iris: 5
+      fingerpalm: 5
+      vector: 5
+    # -- Maximum ram allocated to a divided dataset [GB].
+    # This value is used to calculate the number of pods in bin search worker.
+    maxDatasetSizeInGB:
+      face: 100
+      iris: 100
+      fingerpalm: 100
+      vector: 100
+    asyncResponder:
+      # -- Number of async responder threads generated by search worker.
+      threadCount:
+        face: 2
+        iris: 2
+        fingerpalm: 2
+        vector: 2
+    anon:
+      # -- Number of pods in dataset search worker.
+      replicaCount:
+        face: 2
+        iris: 2
+        fingerpalm: 2
+        vector: 2
+      # -- Number of datasets assigned to a dataset search worker.
+      maxDatasetsPerWorker:
+        face: 100
+        iris: 100
+        fingerpalm: 100
+        vector: 100
+      # -- The grace period in seconds after the processes running in the search worker pod are sent a termination signal.
+      # Not used if set from the REST API.
+      terminationGracePeriodSeconds:
+        face: 30
+        iris: 30
+        fingerpalm: 30
+        vector: 30
+      autoscaling:
+        # -- Target average CPU utilization (represented as a percentage of requested CPU) over all the search worker pods.
+        # Not used if set from the REST API.
+        targetCPUUtilizationPercentage:
+          face: 70
+          iris: 70
+          fingerpalm: 70
+          vector: 70
+      # -- Number of standby search workers to pre-create for immediate dataset assignment.
+      # Higher values provide faster dataset readiness at the cost of idle resource consumption.
+      standbyServerCount:
+        face: 0
+        iris: 0
+        fingerpalm: 0
+        vector: 0
+    resources:
+      requests:
+        # -- Search worker cpu resource request [cores].
+        cpu:
+          face: 2
+          iris: 1
+          fingerpalm: 2
+          vector: 1
+        # -- Search worker memory resource request [GiB].
+        memory:
+          face: 4
+          iris: 1
+          fingerpalm: 23.7
+          vector: 1
+      limits:
+        # -- Search worker cpu resource limit [cores].
+        cpu:
+          face: 2
+          iris: 1
+          fingerpalm: 2
+          vector: 1
+        # -- Search worker memory resource limit [GiB].
+        memory:
+          face: 4
+          iris: 1
+          fingerpalm: 23.7
+          vector: 1
+    vector:
+      # -- Polling interval in seconds for data sync assignments
+      datasyncAssignmentsPollIntervalSeconds: 30
+      # -- Polling interval in seconds for data sync events
+      datasyncEventsPollIntervalSeconds: 30
+      # -- Type of vector database to use (e.g., Lance)
+      databaseType: Lance
+      # -- Interval in seconds between checks for reindex tasks
+      reindexCheckTaskIntervalSeconds: 30
+      # -- Minimum interval in seconds between reindex operations
+      reindexMinIntervalSeconds: 3600
+      # -- Minimum version change required to trigger a reindex
+      reindexMinVersionChange: 5000
+      # -- Duration in seconds after which old index versions are pruned during optimization
+      pruneOlderThanSeconds: 1800
+      # -- GRPC tcp keep alive in seconds
+      grpcTcpKeepaliveSecs: 7200
+    # -- Node taints for search worker pods to tolerate
+    tolerations: []
+    # -- Afiniities for search worker pods
+    affinity: {}
+  tattoo:
+    # -- Node label for tattoo worker pod assignment.
+    nodeSelector:
+      key: kubernetes.io/os
+      val: linux
+    # -- Node taints for tattoo pods to tolerate
+    tolerations: []
+    # -- Afiniities for tattoo worker pods
+    affinity: {}
+  pad:
+    autoscaling:
+      # -- Minimum number of pods in pad worker.
+      minReplicaCount: 1
+      # -- Maximum number of pods in pad worker.
+      maxReplicaCount: 5
+      # -- Target average CPU utilization (represented as a percentage of requested CPU) over all the pad worker pods.
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests:
+        # -- (float) PAD worker cpu resource request [cores].
+        cpu: 1
+        # -- (float) PAD worker memory resource request [GiB].
+        memory: 5
+      limits:
+        # -- (float) PAD worker cpu resource limit [cores].
+        cpu: 2
+        # -- (float) PAD worker memory resource limit [GiB].
+        memory: 8
+    allowcors: "true"
+    pipelines: "pad-r-1,Perseus,dfd-1,hestia,pegasus"
+    # -- Node taints for pad worker pods to tolerate
+    tolerations: []
+  iad:
+    autoscaling:
+      # -- Minimum number of pods in iad worker.
+      minReplicaCount: 1
+      # -- Maximum number of pods in iad worker.
+      maxReplicaCount: 5
+      # -- Target average CPU utilization (represented as a percentage of requested CPU) over all the iad worker pods.
+      targetCPUUtilizationPercentage: 70
+    resources:
+      requests:
+        # -- (float) IAD worker cpu resource request [cores].
+        cpu: 1
+        # -- (float) IAD worker memory resource request [GiB].
+        memory: 3
+      limits:
+        # -- (float) IAD worker cpu resource limit [cores].
+        cpu: 2
+        # -- (float) IAD worker memory resource limit [GiB].
+        memory: 5
+    allowcors: "true"
+    pipelines: "pad-r-1,dfd-1"
+    # -- Node taints for iad worker pods to tolerate
+    tolerations: []
+  license:
+    # -- License type of license key. Must equal the value of the "licenseType" key in the license key.
+    type: paro
+    # -- License server uri.
+    serverUri: https://license-server.license-serverv114.svc.cluster.local
+    # -- Client username to access license server.
+    clientUsername: client
+    # -- Client password to access license server.
+    clientPassword: ClientPass
+  totp:
+    serverUri:
+      # -- Totp server uri for NeoFace initialization.
+      face:
+        nfv4: https://totp.totpv114.svc.cluster.local:8080/neofacev4/v1/totp
+        nfv5: https://totp.totpv114.svc.cluster.local:8080/neofacev5/v1/totp
+        nfv6: https://totp.totpv114.svc.cluster.local:8080/neofacev6/v1/totp
+        nfv7: https://totp.totpv114.svc.cluster.local:8080/neofacev7/v1/totp
+        nfv8: ""  # SCRAM auth for NFV8
+      # -- Totp server uri for NIris initialization.
+      iris:
+        niris3: ""  # Unsupported
+        niris4: ""  # Unsupported
+        niris5: ""  # network license for niris5
+        niris6: ""  # SCRAM auth for niris6
+    # -- Totp customer name.
+    customerName: NDP
+
+logLevel:
+  # -- Paro manager application log level.
+  manager: INFO
+  # -- Paro worker application log level.
+  worker: INFO
+  # -- Hazelcast log level.
+  hazelcast: INFO
+  # -- HikariCP log level.
+  hikariCP: INFO
+  # -- Detailed score logging flag for search worker.
+  matchDetailLogEnabled: false
+
+otelagent:
+  # -- Enable OpenTelemetry or not.
+  enabled: false
+  # -- JVM options for OpenTelemetry.
+  options: ""
+
+db:
+  # -- Database engine profile.
+  # (MySQL: `mysql`, Microsoft SQL Server: `mssql`, PostgreSQL: `postgresql`, Oracle: `oracle`)
+  profile: "oracle"
+  # -- JDBC url to access paro database.
+  # Examples:
+  #   MySQL: jdbc:mariadb://mysql.example.com:3306/parodb?serverTimezone=UTC&sslMode=trust&allowPublicKeyRetrieval=true&socketTimeout=3000
+  #   Microsoft SQL Server: jdbc:sqlserver://mssql.example.com:1433;databaseName=parodb;encrypt=true;trustServerCertificate=true;socketTimeout=3000
+  #   PostgreSQL: jdbc:postgresql://postgresql.example.com:5432/parodb?ssl=true&sslmode=require
+  #   Oracle: jdbc:oracle:thin:@tcps://<endpoint>:2484/parodb?ssl_server_dn_match=false&wallet_location=/etc/wallets
+  url: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  # -- JDBC URL used by Liquibase. It should be the same as db.url, but with a longer socketTimeout.
+  liquibaseUrl: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  # -- Username to access paro database.
+  username: "PARODB"
+  # -- Password to access paro database.
+  password: "P4r0M4n4g3r%*"
+  # -- indicates whether liquibase should run or not, useful when privileges are not granted to the user to create or modify tables.
+  runLiquibase: true
+  # -- Oracle Wallet auto login file paths. Required if using the Oracle database.
+  oracleCWalletPath: ""
+  # -- Oracle Wallet PKCS#12 file paths. Required if using the Oracle database.
+  oracleEWalletPath: ""
+# -- TLS secret for communication between manager and worker.
+parosslsecret: paro-ssl-secret
+
+etlsidecar:
+  # -- Enable ETLExtract-Sidecar or not.
+  enabled: false
+  sidecarContainer:
+    # -- Etlsidecar container resource requests and limits.
+    resources:
+      requests:
+        cpu: 1
+        memory: 1000Mi
+      limits:
+        cpu: 1
+        memory: 2000Mi
+    # -- Etlsidecar container port.
+    serverPort: 8082
+    # -- Java options passed to ETLExtract-Sidecar.
+    javaOpts: "-Xms4g -Xmx4g -XX:-OmitStackTraceInFastThrow"
+  azure:
+    # -- Azure Blob Storage configuration.
+    blobStorage:
+      endpoint: https://bmsetl.blob.core.windows.net/
+      containerName: extractimages
+    # -- Azure keyvault configuration.
+    keyvault:
+      type: Azure
+      endpoint: https://bmsetl.vault.azure.net/
+      secret: blobstoragesastoken
+      token:
+      tenantId:
+      clientId:
+      clientSecret:
+
+kafka:
+  # -- Enable kafka profile or not. If false is specified, gRPC is used for internal communication.
+  enabled: true
+  # -- Prefix of paro kafka topics.
+  topicPrefix: paro
+  # -- A list of host/port pairs to use for establishing the initial connection to the Kafka cluster.
+  bootstrapServers: "paro-kafka:9092"
+  dataset:
+    topic:
+      # -- Replication factor for dataset control and dataset topics created by paro manager.
+      replicationFactor: 1
+      # -- Maximum time we will retain a log of dataset topic (Not dataset control topic).
+      retentionMs: "604800000"
+  jobResult:
+    topic:
+      # -- Replication factor for job result topics created by paro manager.
+      replicationFactor: 1
+      # -- Maximum time we will retain a log of job result topic.
+      retentionMs: "604800000"
+  enrollment:
+    sender:
+      # -- Interval in minutes at which the enrollment KafkaTemplate is rebuilt to release accumulated topic metrics.
+      updateIntervalMins: 10
+  # -- Protocol used to communicate with brokers.
+  # (`plaintext`: PLAINTEXT, `tls`: SASL_SSL)
+  encryption: plaintext
+  auth:
+    # TODO: Remove since authentication is only enabled when kafka.encryption = tls.
+    # -- Authenticate client or not.
+    # Should be set to `true` when `kafka.encryption` is `tls`.
+    enabled: false
+    # -- Username of JAAS login context parameter for SASL connections.
+    username: "username"
+    # -- Password of JAAS login context parameter for SASL connections.
+    password: "password"
+
+service:
+  # -- Service type. (ClusterIP, NodePort, and LoadBalancer)
+  type: NodePort
+  # -- The port on each node on which ParoManager service is exposed when type is NodePort.
+  paroManagerNodePort: 32082
+  # -- Service annotations.
+  annotations: {}
+  # -- IP address range for connection source when type is LoadBalancer.
+  loadBalancerSourceRanges: []
+
+ingress:
+  # -- Create ingress or not.
+  enabled: false
+  # -- Ingress class name.
+  className: ""
+  # -- Ingress annotations.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    kubernetes.io/ingress.class: "nginx"
+  # -- FQDN of a network host.
+  host: "paro.example.com"
+  # -- Path of an incoming request.
+  path: /paro
+  # -- Type of the interpretation of the Path matching.
+  pathType: Prefix
+  tls:
+    # -- Name of th secret used to terminate TLS traffic.
+    secret: ingress-tls
+
+# Gateway API
+gateway:
+  # -- Create a gateway or not.
+  enabled: false
+  # -- Gateway class name (mandatory)
+  # eg=Envoy Gateway
+  className: "eg"
+  # -- FQDN of a network host.
+  host: "paro.example.com"
+  service:
+    # -- Gateway service type. (ClusterIP, LoadBalancer)
+    type: ClusterIP
+    # -- Gateway service annotations.
+    annotations: {}
+  # -- Path of an incoming request.
+  path: /paro
+  # -- Type of the interpretation of the Path matching.
+  pathType: PathPrefix
+  tls:
+    # -- Name of th secret used to terminate TLS traffic on Gateway.
+    secret: gateway-tls
+
+# Envoy L7 load balancer
+envoy:
+  # -- Envoy image
+  image: docker.io/envoyproxy/envoy:distroless-v1.38.0
+  # Settings for Envoy in front of extract workers
+  extract:
+    # -- Enable Envoy L7 load balancer for extract or not.
+    enabled: true
+    # -- Replica count of Envoy for extract: If you need high availability, set it to 2.
+    replicaCount: 1
+    # -- Load balance policy for extract: LEAST_REQUEST or ROUND_ROBIN
+    lb_policy: LEAST_REQUEST
+    # -- least_request specific config
+    least_request_lb_config:
+      choice_count: 8
+    # -- timeout for requests from manager to to upstream (extract workers)
+    timeout: 360s
+    # -- Connect timeout to upstream (extract workers)
+    connectTimeout: 5s
+    # -- Max request body size in bytes for the envoy buffer filter.
+    # Tenprint payloads with 18 finger+palm images can be ~42MB, set it to 52428800.
+    maxRequestBytes: "10485760"
+    # -- Resource requests and limits for the Envoy container for extract.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+  # Settings for Envoy in front of search workers
+  search:
+    # -- Enable Envoy L7 load balancer for search or not.
+    enabled: false
+    # -- Replica count of Envoy for search: If you need high availability, set it to 2.
+    replicaCount: 1
+    # -- Load balance policy for search: LEAST_REQUEST or ROUND_ROBIN
+    lb_policy: LEAST_REQUEST
+    # -- least_request specific config
+    least_request_lb_config:
+      choice_count: 8
+    # -- timeout for requests from manager to to upstream (search workers)
+    timeout: 360s
+    # -- Connect timeout to upstream (search workers)
+    connectTimeout: 5s
+    # -- Max request body size in bytes for the envoy buffer filter.
+    # Tenprint payloads with 18 finger+palm images can be ~42MB, set it to 52428800.
+    maxRequestBytes: "10485760"
+    # -- Resource requests and limits for the Envoy container for search.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+

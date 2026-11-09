@@ -1,0 +1,77 @@
+# -- Number of pods in NDP cache server.
+replicaCount: 3
+
+image:
+  # -- NDP cache server container image registry.
+  registry: docker.neclatam-cloud.com
+  # -- NDP cache server container image repository.
+  repository: bms/v1.14_ga/ndp-cache-server
+  # -- NDP cache server container image tag.
+  tag: 1.10.1-2756c2c4d-20260722160802
+
+# -- NDP cache server container image pull policy.
+imagePullPolicy: Always
+
+imagePullSecret:
+  # -- Image pull secret name for pulling NDP cache server container image.
+  name: ndp-cache-server-regcred
+  registryCredential:
+    # -- Private container registry username for pulling NDP cache server container image.
+    username: delivery-latam
+    # -- Private container registry password for pulling NDP cache server container image.
+    password: bsBh6zeM-BrPd9hCBbvD_LRW
+
+# -- NDP cache server container resource requests and limits.
+resources:
+  requests:
+    cpu: 200m
+    memory: 4000Mi
+  limits:
+    cpu: 2000m
+    memory: 5000Mi
+
+# -- Java options passed to NDP cache server.
+javaOpts: "-Xms4g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:-OmitStackTraceInFastThrow -Dhazelcast.map.eviction.batch.size=10"
+
+otelagent:
+  # -- Enable OpenTelemetry or not.
+  enabled: false
+  # -- JVM options for OpenTelemetry.
+  options: ""
+
+# -- Selector which must be true for the NDP cache server pod to fit on a node.
+nodeSelector: {}
+
+# -- Tolerations for the NDP cache server pod.
+tolerations: []
+
+# -- NDP cache server container startup probe.
+startupProbe: {}
+
+# -- NDP cache server container liveness probe.
+livenessProbe:
+  httpGet:
+    scheme: HTTP
+    port: 8080
+    path: /
+  initialDelaySeconds: 120
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- NDP cache server container readiness probe.
+readinessProbe:
+  httpGet:
+    scheme: HTTP
+    port: 8080
+    path: /
+  initialDelaySeconds: 90
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- NDP cache server container lifecycle hook.
+lifecycle: {}
+

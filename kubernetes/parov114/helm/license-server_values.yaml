@@ -1,0 +1,128 @@
+# -- Number of pods in license-server.
+replicaCount: 1
+
+image:
+  # -- container image registry.
+  registry: docker.neclatam-cloud.com
+  # -- container image repository.
+  repository: bms/v1.14_ga/license-server
+  # -- container image tag.
+  tag: 2.0.2
+
+# -- container image pull policy.
+imagePullPolicy: Always
+
+imagePullSecret:
+  # -- Image pull secret name for pulling container image.
+  name: license-server-regcred
+  registryCredential:
+    # -- Private container registry username for pulling container image.
+    username: delivery-latam
+    # -- Private container registry password for pulling container image.
+    password: bsBh6zeM-BrPd9hCBbvD_LRW
+
+# -- container node selector.
+nodeSelector: {}
+
+# -- container tolerations.
+tolerations: []
+
+# -- pod-level security context. Avoid setting runAsUser/runAsGroup/fsGroup so platforms such as OpenShift can assign them.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- container-level security context.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- server container resource requests and limits.
+resources:
+  requests:
+    memory: 50Mi
+
+# -- container startup probe.
+startupProbe: {}
+
+# -- container liveness probe.
+livenessProbe:
+  httpGet:
+    scheme: HTTPS
+    port: 8080
+    path: /health
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- container readiness probe.
+readinessProbe:
+  httpGet:
+    scheme: HTTPS
+    port: 8080
+    path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- container lifecycle hook.
+lifecycle: {}
+
+service:
+  # -- Service port. Change to 443 for compatibility with license-server < 1.4.
+  port: 443
+
+# -- Enable https server or not.
+httpsEnabled: true
+
+# Database configuration.
+db:
+  # -- Database driver: "mysql", "mssql", "postgres", "oracle", "sqlite".
+  driver: "oracle"
+
+  # -- Database DSN
+  #dsn: "/tmp/license-server.db" # sqlite
+  #dsn: "user:pass@tcp(mysql:3306)/license_server?charset=utf8mb4&parseTime=True&loc=Local&tls=skip-verify" # mysql
+  #dsn: "sqlserver://user:pass@mssql:1433?database=license_server&encrypt=true&TrustServerCertificate=true" # mssql
+  #dsn: "host=postgres port=5432 user=postgres password=postgres dbname=license_server  sslmode=require" # postgres
+  #dsn: 'user="LICENSE_SERVER" password="L1c3n53S3rv3r%*" connectString="tcps://172.31.92.116:2484/pdbbms114?ssl_server_dn_match=false&wallet_location=/opt/wallets"' # oracle
+  dsn: 'user="LICENSE_SERVER" password="L1c3n53S3rv3r%*" connectString="172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"' # oracle
+  
+  # -- Skip database migration.
+  skipMigration: false
+
+  # -- Oracle Wallet auto login file paths. Required if using the Oracle database.
+  oracleCWalletPath: ""
+  # -- Oracle Wallet PKCS#12 file paths. Required if using the Oracle database.
+  oracleEWalletPath: ""
+
+# Credentials
+credentials:
+  client:
+    # -- License client username.
+    username: client
+    # -- License client password.
+    password: ClientPass
+  admin:
+    # -- Admin user username.
+    username: admin
+    # -- Admin user password.
+    password: AdminPass
+
+# -- TLS certificate file
+tlsCertChainFile: ""
+# -- TLS private key file
+tlsPrivateKeyFile: ""
+
+license:
+  # -- Number of days to log warnings before license key expiration
+  warnExpirationDays: 30
+
