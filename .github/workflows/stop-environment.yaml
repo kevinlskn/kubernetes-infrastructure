@@ -1,0 +1,89 @@
+
+name: Stop parov114 environment
+
+'on':
+  workflow_dispatch:
+    inputs:
+      confirm_shutdown:
+        description: 'Confirmar que deseas apagar el ambiente parov114'
+        required: true
+        type: choice
+        options:
+          - 'no'
+          - 'yes'
+
+permissions:
+  contents: read
+
+# Evita ejecutar el apagado simultáneamente con un despliegue.
+concurrency:
+  group: deploy-parov114-oke
+  cancel-in-progress: false
+
+jobs:
+  stop:
+    name: Stop parov114
+    if: ${{ inputs.confirm_shutdown == 'yes' }}
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Verify Kubernetes connection
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      # AWM
+      - name: Stop AWM services
+        run: |
+          kubectl scale sts/social-id-api sts/awm sts/awm-rest-service sts/awm-terminal-manager sts/biometric-service \
+            deploy/vt-web deploy/bioservice deploy/bms-adapter-1 deploy/bms-adapter-2 \
+            deploy/common-service deploy/notification-mock deploy/security-service \
+            -n awm --replicas=0
+
+      # TXNMGR
+      - name: Stop TXNMGR
+        run: |
+          kubectl scale deploy/txnmgr -n txnmgrv114 --replicas=0
+
+      # PARO
+      - name: Stop PARO manager
+        run: |
+          kubectl scale deploy/paro-manager -n parov114 --replicas=0
+
+      - name: Remove PARO workers
+        run: |
+          kubectl delete deployments,services,rs,pods,hpa \
+            -n parov114 -l appType=SEARCH --ignore-not-found=true
+
+          kubectl delete deployments,services,rs,pods,hpa \
+            -n parov114 -l appType=EXTRACT --ignore-not-found=true
+
+          kubectl delete sts,services,rs,pods \
+            -n parov114 -l appType=DATASET_WORKER --ignore-not-found=true
+
+      # TOTP
+      - name: Stop TOTP
+        run: |
+          kubectl scale deploy/totp -n totpv114 --replicas=0
+
+      # LICENSE SERVER
+      - name: Stop License Server
+        run: |
+          kubectl scale deploy/license-server -n license-serverv114 --replicas=0
+
+      # NDP CACHE SERVER
+      - name: Stop NDP Cache Server
+        run: |
+          kubectl scale sts/ndp-cache-server -n ndp-cache-serverv114 --replicas=0
+
+      # VERIFICACIÓN
+      - name: Show environment status
+        run: |
+          echo "=== PODS RESTANTES ==="
+          kubectl get pods -A
+
+          echo "=== DEPLOYMENTS ==="
+          kubectl get deployments -A
+
+          echo "=== STATEFULSETS ==="
+          kubectl get statefulsets -A
