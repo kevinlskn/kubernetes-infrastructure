@@ -57,6 +57,19 @@ jobs:
           kubectl kustomize kubernetes/parov114
           kubectl apply -k kubernetes/parov114
 
+      - name: Verify NDP Cache Helm Chart
+        run: |
+          echo "Directorio actual:"
+          pwd
+
+          echo "Contenido de la carpeta:"
+          ls -la kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/
+
+          echo "Verificando archivo:"
+          test -f kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/ndp-cache-server-1.4.0.tgz
+
+          echo "Contenido del paquete:"
+          tar -tzf kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/ndp-cache-server-1.4.0.tgz | head -20
 
       - name: Deploy NDP Cache Server
         run: |
