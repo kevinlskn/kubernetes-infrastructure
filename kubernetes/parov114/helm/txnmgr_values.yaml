@@ -159,7 +159,7 @@ txnmgr:
     # The capacity of the job callback process channel.
     jobCallbackProcessChannelCapacity: 50
     # Number of days to retain inactive tenants.
-    inactiveTenantRetentionDays: 15
+    inactiveTenantRetentionDays: 99999
     # -- Prefix tenantId to bin/dataset IDs in search responses (e.g., "tenantId/containerId").
     prefixTenantIdInSearchResponse: false
   # -- Outbound HTTP client (Ktor) timeouts. Bound to prevent worker threads from being
