@@ -1,0 +1,126 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-service-config
+  namespace: awm
+data:
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_TAGS_APPLICATION: "security-service"
+  spring.datasource.testWhileIdle: "true"
+  spring.datasource.validationQuery: "SELECT 1"
+  spring.jpa.hibernate.ddl-auto: "none"
+  spring.jpa.hibernate.naming.implicit-strategy: "org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyHbmImpl"
+  spring.jpa.hibernate.naming.physical-strategy: "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy"
+  spring.jpa.properties.hibernate.dialect: "org.hibernate.dialect.Oracle12cDialect"
+  spring.datasource.driver-class-name: "oracle.jdbc.driver.OracleDriver"
+
+---
+
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: security-service-secrets
+  namespace: awm
+type: Opaque
+stringData:
+  SPRING_DATASOURCE_URL: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  SPRING_DATASOURCE_USERNAME: "SOCIALID_SECURITY"
+  SPRING_DATASOURCE_PASSWORD: "SOCIALID_SECURITY_bmsv114"
+
+---
+
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-service
+  namespace: awm
+  labels:
+    app: security-service  
+  
+spec:
+  replicas: 1
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  
+  
+  selector:
+    matchLabels:
+      app: security-service
+  template:
+    metadata:
+      labels:
+        app: security-service
+    spec:          
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: regcred-neclatam
+
+      containers:
+      - name: security-service
+        image: docker.neclatam-cloud.com/social-id/security-service:7.0.2-SNAPSHOT
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        
+        envFrom:
+        - configMapRef:
+            name: security-service-config
+        - secretRef:
+            name: security-service-secrets
+
+
+          # Startup: permite hasta 5 minutos para iniciar
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+          # Liveness: verifica que Tomcat acepte conexiones
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+          # Readiness: verifica que la aplicación responda HTTP 200
+        readinessProbe:
+          httpGet:
+            path: /security/version
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-service
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: security-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

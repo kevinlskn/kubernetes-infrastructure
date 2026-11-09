@@ -1,0 +1,189 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: social-id-api-config
+  namespace: awm
+data:
+  TZ: "America/Argentina/Buenos_Aires"
+  awm.properties.file.path: "/home/awm/awm-system/conf/conf.properties"
+  audit.enabled: "false"
+  audit.activemq.broker-url: "tcp://activemq.activemq-clasic.svc.cluster.local:61616"
+  audit.activemq.user: "admin"
+  audit.activemq.password: "N3c4r123!"
+  biometric.transaction.expect-sync-response: "false"
+  logging.level.ar.com.nec.socialid.api: "error"
+  jre.enable-rest: "true"
+  jre.service.base-url: "http://awm:8080"
+  pget.enable-rest: "true"
+  pget.service.base-url: "http://awm:8080"
+  pgeth.enable-rest: "true"
+  pgeth.service.base-url: "http://awm:8080"
+  bms.processing.useInterestListAsBinsGalley: "true"
+  bms.processing.bins.face: "DEFAULT_7_FACE_CIVIL"
+  bms.processing.bins.finger: "DEFAULT_3_FINGER_CARD_ROLL_CIVIL"
+  pver.enable-rest: "true"
+  pver.service.base-url: "https://paro-manager-v114.paro.svc.cluster.local:8080/paro/v1"
+  #pver.service.base-url: "https://paro-manager.parov114.svc.cluster.local:8080/paro/v1"
+  verdict.autohit.finger-score: "1000"
+  verdict.autohit.finger-match-percentage: "20"
+  verdict.autohit.face-score: "7000"
+  search.cross-finger-enabled: "false"
+  registered-fingers.service.base-url: "http://awm:8080"
+
+
+---
+# Secret (Truststore TLS)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: paro-truststore
+  namespace: awm
+type: Opaque
+data:
+  truststore.jks: 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
+
+---
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: social-id-api
+  namespace: awm
+spec:
+  serviceName: social-id-api
+  replicas: 1
+  selector:
+    matchLabels:
+      app: social-id-api
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0      
+  template:
+    metadata:
+      labels:
+        app: social-id-api
+    spec:
+      imagePullSecrets:
+        - name: regcred-neclatam
+
+      containers:
+      - name: social-id-api
+        image: docker.neclatam-cloud.com/social-id/social-id-api:7.2.9-DATAPREV
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+
+        envFrom:
+        - configMapRef:
+            name: social-id-api-config
+
+        env:
+        - name: JAVA_TOOL_OPTIONS
+          value: >
+            -Djavax.net.ssl.trustStore=/etc/ssl/truststore/truststore.jks
+            -Djavax.net.ssl.trustStorePassword=changeit
+
+        volumeMounts:
+        - name: awm-system
+          mountPath: /home/awm/awm-system
+
+        - name: next-id-sequences
+          mountPath: /next-id-sequences
+
+        - name: truststore-volume
+          mountPath: /etc/ssl/truststore
+          readOnly: true
+
+        resources:
+          requests:
+            cpu: "1"
+            memory: 4Gi
+          limits:
+            cpu: "1"
+            memory: 4Gi
+         
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      volumes:
+      - name: truststore-volume
+        secret:
+          secretName: paro-truststore
+
+
+
+  volumeClaimTemplates:
+  - metadata:
+      name: awm-system
+      namespace: awm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 50Gi
+      storageClassName: oci-bv
+
+  - metadata:
+      name: next-id-sequences
+      namespace: awm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: oci-bv
+
+---
+# Service ClusterIP
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: social-id-api
+#  namespace: awm
+#spec:
+#  type: ClusterIP
+#  selector:
+#    app: social-id-api
+#  ports:
+#    - port: 8080
+#      targetPort: 8080
+
+# Service NODEPORT
+apiVersion: v1
+kind: Service
+metadata:
+  name: social-id-api
+  namespace: awm
+spec:
+  type: NodePort
+  selector:
+    app: social-id-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+      nodePort: 30081
+      

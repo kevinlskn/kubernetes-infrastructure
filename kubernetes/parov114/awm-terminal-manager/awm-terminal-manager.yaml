@@ -1,0 +1,135 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: awm-terminal-manager-config
+  namespace: awm
+data:
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_TAGS_APPLICATION: "awm-terminal-manager"
+  SOCIALID_SECURITY_DATABASE_DRIVER_CLASS: "oracle.jdbc.driver.OracleDriver"
+  SOCIALID_SECURITY_DATABASE_HIBERNATE_DIALECT: "org.hibernate.dialect.Oracle10gDialect"
+  SOCIALID_SECURITY_DATABASE_HIBERNATE_TEST_QUERY: "SELECT 1 FROM DUAL"
+  SOCIALID_REPORT_DATABASE_TYPE: "oracle"
+  SOCIALID_COMMON_SERVICE_EXTERNAL_URL: "http://common-service:8080/"
+  ACTIVEMQ_BROKER_URL: "tcp://activemq.activemq-clasic.svc.cluster.local:61616"
+
+---
+
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: awm-terminal-manager-secrets
+  namespace: awm
+type: Opaque
+stringData:
+  SOCIALID_SECURITY_DATABASE_CONNECTION_URL: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  SOCIALID_SECURITY_DATABASE_USERNAME: "SOCIALID_SECURITY"
+  SOCIALID_SECURITY_DATABASE_PASSWORD: "SOCIALID_SECURITY_bmsv114"
+  SOCIALID_REPORT_DATABASE_CONNECTION_URL: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  SOCIALID_REPORT_DATABASE_USERNAME: "SOCIALID_REPORT"
+  SOCIALID_REPORT_DATABASE_PASSWORD: "SOCIALID_REPORT_bmsv114"
+
+---
+
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: awm-terminal-manager
+  namespace: awm
+spec:
+  serviceName: awm-terminal-manager
+  replicas: 1
+  selector:
+    matchLabels:
+      app: awm-terminal-manager
+  template:
+    metadata:
+      labels:
+        app: awm-terminal-manager
+    spec:
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: regcred-neclatam
+      containers:
+      - name: awm-terminal-manager
+        image: docker.neclatam-cloud.com/social-id/awm-terminal-manager:7.0.4-SNAPSHOT
+        imagePullPolicy: Always
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        env:
+          - name: TZ
+            value: America/Argentina/Buenos_Aires
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: "1"
+            memory: 2Gi
+            
+        envFrom:
+        - configMapRef:
+            name: awm-terminal-manager-config
+        - secretRef:
+            name: awm-terminal-manager-secrets
+            
+        volumeMounts:
+        - name: awm-system
+          mountPath: /home/awm/awm-system
+          
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3  
+          
+  volumeClaimTemplates:
+  - metadata:
+      name: awm-system
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: oci-bv
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: awm-terminal-manager
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: awm-terminal-manager
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

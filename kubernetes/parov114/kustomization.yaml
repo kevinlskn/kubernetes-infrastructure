@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - activemq-clasic/activemq-clasic.yaml
+  - awm/awm.yaml
+  - awm-rest-service/awm-rest-service.yaml
+  - awm-terminal-manager/awm-terminal-manager.yaml
+  - biometric-service/biometric-service.yaml
+  - bioservice/bioservice.yaml
+  - bms-adapter/bms-adapter_replicas_extractor.yaml
+  - common-service/common-service.yaml
+  - notification-mock/notification-mock.yaml
+  - security-service/security-service.yaml
+  - social-id-api/social-id-api.yaml
+  - vt-web/vt-web.yaml

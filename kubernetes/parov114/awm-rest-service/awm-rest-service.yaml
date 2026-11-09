@@ -1,0 +1,99 @@
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: awm-rest-service
+  namespace: awm
+spec:
+  serviceName: awm-rest-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: awm-rest-service
+  template:
+    metadata:
+      labels:
+        app: awm-rest-service
+    spec:
+      imagePullSecrets:
+        - name: regcred-neclatam
+      containers:
+      - name: awm-rest-service
+        image: docker.neclatam-cloud.com/social-id/awm-rest-service:7.1.11-DATAPREV
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        env:
+        - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+          value: "health,info,prometheus,metrics"
+        - name: MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED
+          value: "true"
+        - name: MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED
+          value: "true"
+        - name: MANAGEMENT_METRICS_TAGS_APPLICATION
+          value: "awm-rest-service"
+        volumeMounts:
+        - name: awm-system
+          mountPath: /home/awm/awm-system
+
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 2Gi
+          limits:
+            cpu: "1"
+            memory: 2Gi
+
+            
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+            
+  volumeClaimTemplates:
+  - metadata:
+      name: awm-system
+      namespace: awm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: oci-bv
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: awm-rest-service
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: awm-rest-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

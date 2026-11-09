@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bioservice-config
+  namespace: awm
+data:
+  JAVA_OPTS: "-Xms512m -Xmx2g"
+  management.endpoints.web.exposure.include: "health,info,prometheus"
+  spring.main.allow-bean-definition-overriding: "true"
+  bioservice.face.verify.mode.dummy: "true"
+  bioservice.face.extract.mode.dummy: "true"
+  bioservice.fingerprint.quality.mode.dummy: "false"
+  bioservice.voice.mode.dummy: "true"
+  fingerVerify.extract.ribbon.NFLoadBalancerRuleClassName: "com.netflix.loadbalancer.BestAvailableRule"
+  bioservice.fingerprint.verify.speedLevel: "4"
+  bioservice.fingerprint.verify.rotationLimit: "32"
+  bioservice.fingerprint.verify.distortionLevel: "1"
+  license.application.id: "bioservice-dev-necar"
+  license.gateway.url: "https://licenser.neclatam-cloud.com/licenses/"
+  license.validate.online.cron: "0 0 */12 * * *"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bioservice
+  namespace: awm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: bioservice
+  template:
+    metadata:
+      labels:
+        app: bioservice
+    spec:
+      imagePullSecrets:
+        - name: regcred-neclatam
+      containers:
+      - name: bioservice
+        image: docker.neclatam-cloud.com/bioservice:1.18.0-NFV4
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: bioservice-config
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: "1"
+            memory: 3Gi
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+            
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bioservice
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: bioservice
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

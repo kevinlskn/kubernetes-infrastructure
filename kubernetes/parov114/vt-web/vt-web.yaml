@@ -1,0 +1,117 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vt-web-config
+  namespace: awm
+data:
+  AWM_REST_SERVICE_URL: "http://awm-rest-service:8080/awm-rest-service/api/v1.0"
+  SECURITY_SERVICE_URL: "http://security-service:8080/security/api/v1.0"
+
+---
+
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vt-web
+  namespace: awm
+  labels:
+    app: vt-web  
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    
+  selector:
+    matchLabels:
+      app: vt-web
+      
+  template:
+    metadata:
+      labels:
+        app: vt-web
+        
+        
+    spec:
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: regcred-neclatam
+
+      containers:
+      - name: vt-web
+        image: docker.neclatam-cloud.com/social-id/vt-web:7.1.1
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+        
+        envFrom:
+        - configMapRef:
+            name: vt-web-config
+
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+
+# Service Cluster
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: vt-web
+#  namespace: awm
+#spec:
+#  type: ClusterIP
+#  selector:
+#    app: vt-web
+#  ports:
+#    - port: 8080
+#      targetPort: 8080
+
+# =========================================================
+# SERVICE - NODEPORT
+# =========================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: vt-web
+  namespace: awm
+spec:
+  type: NodePort
+  selector:
+    app: vt-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080
+      protocol: TCP

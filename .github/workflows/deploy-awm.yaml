@@ -1,12 +1,12 @@
 
-name: Deploy AWM to OKE
+name: Deploy parov114 to OKE
 
 'on':
   push:
     branches:
       - main
     paths:
-      - "kubernetes/parov114/awm/**"
+      - "kubernetes/parov114/**"
       - ".github/workflows/deploy-awm.yaml"
 
   workflow_dispatch:
@@ -15,12 +15,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-awm-parov114
+  group: deploy-parov114
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Apply AWM manifests
+    name: Apply all parov114 manifests
     runs-on: [self-hosted, linux, x64]
 
     steps:
@@ -30,25 +30,17 @@ jobs:
       - name: Verify Kubernetes connection
         run: |
           kubectl config current-context
-          kubectl get namespace awm
+          kubectl get nodes
 
-      - name: Validate manifests
+      - name: Build all manifests
         run: |
-          kubectl kustomize kubernetes/parov114/awm \
-            > /tmp/awm-rendered.yaml
+          kubectl kustomize kubernetes/parov114 \
+            > /tmp/parov114-rendered.yaml
 
-      - name: Apply AWM manifests
+      - name: Apply all parov114 resources
         run: |
-          kubectl apply -k kubernetes/parov114/awm
+          kubectl apply -k kubernetes/parov114
 
-      - name: Wait for AWM rollout
+      - name: Show applied resources
         run: |
-          kubectl rollout status statefulset/awm \
-            -n awm \
-            --timeout=300s
-
-      - name: Show deployment status
-        run: |
-          kubectl get statefulset awm -n awm
-          kubectl get pods -n awm -l app=awm
-          kubectl get service awm -n awm
+          kubectl get -f /tmp/parov114-rendered.yaml

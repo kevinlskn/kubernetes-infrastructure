@@ -1,0 +1,116 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: biometric-service-config
+  namespace: awm
+data:
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_TAGS_APPLICATION: "biometric-service"
+
+---
+
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: biometric-service
+  namespace: awm
+  labels:
+    app: biometric-service
+    
+spec:
+  serviceName: biometric-service
+  replicas: 1
+  
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+      
+  selector:
+    matchLabels:
+      app: biometric-service
+  template:
+    metadata:
+      labels:
+        app: biometric-service
+    spec:
+     terminationGracePeriodSeconds: 30
+     imagePullSecrets:
+        - name: regcred-neclatam
+     containers:
+      - name: biometric-service
+        image: docker.neclatam-cloud.com/social-id/biometric-service:7.0.0
+        imagePullPolicy: IfNotPresent      
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+          
+        envFrom:
+        - configMapRef:
+            name: biometric-service-config
+            
+        volumeMounts:
+        - name: awm-system
+          mountPath: /home/awm/awm-system
+          
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3          
+          
+  volumeClaimTemplates:
+  - metadata:
+      name: awm-system
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: oci-bv
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: biometric-service
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: biometric-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

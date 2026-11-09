@@ -1,0 +1,126 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-service-config
+  namespace: awm
+data:
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus,metrics"
+  MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED: "true"
+  MANAGEMENT_METRICS_TAGS_APPLICATION: "common-service"
+  spring.datasource.testWhileIdle: "true"
+  spring.datasource.validationQuery: "SELECT 1"
+  spring.jpa.hibernate.ddl-auto: "none"
+  spring.jpa.hibernate.naming.implicit-strategy: "org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyHbmImpl"
+  spring.jpa.hibernate.naming.physical-strategy: "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy"
+  spring.jpa.properties.hibernate.dialect: "org.hibernate.dialect.Oracle12cDialect"
+  spring.datasource.driver-class-name: "oracle.jdbc.driver.OracleDriver"
+
+---
+
+# Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: common-service-secrets
+  namespace: awm
+type: Opaque
+stringData:
+  SPRING_DATASOURCE_URL: "jdbc:oracle:thin:@//172.31.92.116:1521/dbbms114_PDBBMS114.paas.oracle.com"
+  SPRING_DATASOURCE_USERNAME: "SOCIALID_COMMON"
+  SPRING_DATASOURCE_PASSWORD: "SOCIALID_COMMON_bmsv114"
+
+---
+
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: common-service
+  namespace: awm
+  labels:
+    app: common-service
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+      
+  selector:
+    matchLabels:
+      app: common-service
+  template:
+    metadata:
+      labels:
+        app: common-service
+    spec:
+      terminationGracePeriodSeconds: 30
+      imagePullSecrets:
+        - name: regcred-neclatam
+      containers:
+      - name: common-service
+        image: docker.neclatam-cloud.com/social-id/common-service:7.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+          
+        envFrom:
+        - configMapRef:
+            name: common-service-config
+        - secretRef:
+            name: common-service-secrets
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /lookup/version
+            port: http
+            scheme: HTTP
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: common-service
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: common-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

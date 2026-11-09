@@ -1,0 +1,51 @@
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-mock-config
+  namespace: awm
+data:
+  logging.level.ar.com.nec: "DEBUG"
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-mock
+  namespace: awm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-mock
+  template:
+    metadata:
+      labels:
+        app: notification-mock
+    spec:
+      imagePullSecrets:
+        - name: regcred-neclatam    
+      containers:
+      - name: notification-mock
+        image: docker.neclatam-cloud.com/social-id/social-id-notification-mock:1.0.0-SNAPSHOT
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: notification-mock-config
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-mock
+  namespace: awm
+spec:
+  selector:
+    app: notification-mock
+  ports:
+    - port: 8080
+      targetPort: 8080

@@ -1,0 +1,246 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: activemq-clasic
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: activemq-setenv
+  namespace: activemq-clasic
+data:
+  setenv: |
+    #!/bin/bash
+    # Custom setenv para aumentar memoria del broker
+    export ACTIVEMQ_OPTS_MEMORY="-Xms8G -Xmx12G"
+    export ACTIVEMQ_OPTS="$ACTIVEMQ_OPTS_MEMORY -Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=/opt/apache-activemq/conf/login.config -Djetty.host=0.0.0.0"
+
+
+---
+
+# ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: activemq-config
+  namespace: activemq-clasic
+data:
+  users.properties: |
+    admin=N3c4r123!
+  groups.properties: |
+    admins=admin
+  activemq.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <beans xmlns="http://www.springframework.org/schema/beans"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://activemq.apache.org/schema/core http://activemq.apache.org/schema/core/activemq-core.xsd">
+
+        <broker xmlns="http://activemq.apache.org/schema/core"
+        brokerName="localhost"
+        dataDirectory="/opt/apache-activemq/data"
+        useJmx="true"
+        persistent="true">
+            <destinationPolicy>
+                <policyMap>
+                  <policyEntries>
+                    <policyEntry queue=">"
+                       producerFlowControl="false"
+                       useCache="false"
+                       memoryLimit="512mb"
+                       prioritizedMessages="false">
+
+                        <!-- Límite de mensajes pendientes en memoria -->
+                       <pendingMessageLimitStrategy>
+                          <constantPendingMessageLimitStrategy limit="50000"/>
+                       </pendingMessageLimitStrategy>
+                   </policyEntry>
+                    <policyEntry topic=">" expireMessagesPeriod="300000">
+                      <pendingMessageLimitStrategy>
+                        <constantPendingMessageLimitStrategy limit="100000"/>
+                      </pendingMessageLimitStrategy>
+                    </policyEntry>
+                  </policyEntries>
+                </policyMap>
+            </destinationPolicy>
+
+            <managementContext>
+                <managementContext createConnector="true" connectorPort="1099"/>
+            </managementContext>
+
+            <persistenceAdapter>
+                <kahaDB
+                  directory="/opt/apache-activemq/data/kahadb"
+                  enableIndexWriteAsync="true"
+                  indexWriteBatchSize="10000"
+                  checkForCorruptJournalFiles="true"
+                  cleanupInterval="60000"
+                  archiveDataLogs="false"
+                  checksumJournalFiles="true"
+                  concurrentStoreAndDispatchQueues="true"
+                  concurrentStoreAndDispatchTopics="true" />
+            </persistenceAdapter>
+
+            <systemUsage>
+                <systemUsage>
+                    <memoryUsage>
+                        <memoryUsage percentOfJvmHeap="90" />
+                    </memoryUsage>
+                    <storeUsage>
+                        <storeUsage limit="500 gb"/>
+                    </storeUsage>
+                    <tempUsage>
+                        <tempUsage limit="400 gb"/>
+                    </tempUsage>
+                </systemUsage>
+            </systemUsage>
+
+            <transportConnectors>
+                 <transportConnector name="openwire" uri="tcp://0.0.0.0:61616?maximumConnections=100000&amp;wireFormat.maxFrameSize=104857600"/>
+              </transportConnectors>
+
+            <shutdownHooks>
+                <bean xmlns="http://www.springframework.org/schema/beans" class="org.apache.activemq.hooks.SpringContextHook" />
+            </shutdownHooks>
+
+        </broker>
+    </beans>
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: activemq
+  namespace: activemq-clasic
+  labels:
+    app: activemq
+spec:
+  clusterIP: None
+  selector:
+    app: activemq
+  ports:
+    - name: web
+      port: 8161
+      targetPort: 8161
+    - name: openwire
+      port: 61616
+      targetPort: 61616
+    - name: jmx
+      port: 1099
+      targetPort: 1099
+---
+
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: activemq
+  namespace: activemq-clasic
+spec:
+  serviceName: "activemq"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activemq
+  template:
+    metadata:
+      labels:
+        app: activemq
+    spec:    
+      containers:
+        - name: activemq
+          image: docker.io/apache/activemq-classic:6.1.2
+          ports:
+            - name: web
+              containerPort: 8161
+            - name: openwire
+              containerPort: 61616
+            - name: jmx
+              containerPort: 1099
+          env:
+            - name: TZ
+              value: "America/Argentina/Buenos_Aires"
+            - name: ACTIVEMQ_OPTS_MEMORY
+              value: "-Xms8G -Xmx12G"
+          resources:
+              requests:
+                memory: "14Gi"
+                ephemeral-storage: "5Gi"
+              limits:
+                memory: "16Gi"
+                ephemeral-storage: "10Gi"
+                
+
+          startupProbe:
+            tcpSocket:
+              port: openwire
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+          readinessProbe:
+            tcpSocket:
+              port: openwire
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            tcpSocket:
+              port: openwire
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "sleep 15"
+                
+          volumeMounts:
+            - name: activemq-data
+              mountPath: /opt/apache-activemq/data
+            # Subdirectorios adicionales para datos temporales y logs
+            - name: activemq-data
+              mountPath: /opt/apache-activemq/tmp
+              subPath: tmp
+            - name: activemq-data
+              mountPath: /opt/apache-activemq/tmp_storage
+              subPath: tmp_storage
+            - name: activemq-data
+              mountPath: /opt/apache-activemq/logs
+              subPath: logs
+            - name: activemq-config
+              mountPath: /opt/apache-activemq/conf/users.properties
+              subPath: users.properties
+            - name: activemq-config
+              mountPath: /opt/apache-activemq/conf/groups.properties
+              subPath: groups.properties
+            - name: activemq-config
+              mountPath: /opt/apache-activemq/conf/activemq.xml
+              subPath: activemq.xml
+            - name: setenv-volume
+              mountPath: /opt/apache-activemq/bin/setenv
+              subPath: setenv
+      volumes:
+        - name: activemq-config
+          configMap:
+            name: activemq-config
+        - name: setenv-volume
+          configMap:
+            name: activemq-setenv
+  volumeClaimTemplates:
+    - metadata:
+        name: activemq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 500Gi
+        storageClassName: oci-bv 
