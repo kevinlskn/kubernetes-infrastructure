@@ -6,7 +6,7 @@ metadata:
   namespace: awm
 spec:
   serviceName: awm
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: awm
