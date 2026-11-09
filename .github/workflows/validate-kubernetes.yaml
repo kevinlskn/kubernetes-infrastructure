@@ -1,0 +1,55 @@
+
+name: Validate Kubernetes Manifests
+
+'on':
+  push:
+    branches:
+      - main
+    paths:
+      - "kubernetes/**"
+      - ".github/workflows/validate-kubernetes.yaml"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "kubernetes/**"
+      - ".github/workflows/validate-kubernetes.yaml"
+
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate AWM manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.35.2"
+
+      - name: Install Kubeconform
+        run: |
+          curl -L \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            -o kubeconform.tar.gz
+
+          tar -xzf kubeconform.tar.gz
+          sudo install kubeconform /usr/local/bin/kubeconform
+
+      - name: Build AWM manifests with Kustomize
+        run: |
+          kubectl kustomize kubernetes/parov114/awm \
+            > /tmp/awm-rendered.yaml
+
+      - name: Validate Kubernetes schemas
+        run: |
+          kubeconform \
+            -strict \
+            -summary \
+            -kubernetes-version 1.35.0 \
+            /tmp/awm-rendered.yaml
