@@ -61,33 +61,33 @@ jobs:
       - name: Deploy NDP Cache Server
         run: |
           helm upgrade --install ndp-cache-server-v114 \
-            kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/ndp-cache-server-1.4.0.tgz \
-            -f kubernetes/parov114/helm/ndp-cache-server_values.yaml \
+            ./kubernetes/parov114/helm/ndp-cache-server-v1.10.1/helm/ndp-cache-server-1.4.0.tgz \
+            -f ./kubernetes/parov114/helm/ndp-cache-server_values.yaml \
             --namespace ndp-cache-serverv114 \
             --create-namespace
 
       - name: Deploy License server
         run: |
           helm upgrade --install license-server-v114 \
-            kubernetes/parov114/helm/license-server-v2.0.2/helm/license-server-2.0.2.tgz \
-            -f kubernetes/parov114/helm/license-server_values.yaml \
+            ./kubernetes/parov114/helm/license-server-v2.0.2/helm/license-server-2.0.2.tgz \
+            -f ./kubernetes/parov114/helm/license-server_values.yaml \
             --namespace license-serverv114 \
             --create-namespace
 
       - name: Deploy totp
         run: |
           helm upgrade --install totp-v114 \
-            kubernetes/parov114/helm/totp-v2.2.6/helm/totp-2.2.6.tgz \
-            -f kubernetes/parov114/helm/totp_values.yaml \
+            ./kubernetes/parov114/helm/totp-v2.2.6/helm/totp-2.2.6.tgz \
+            -f ./kubernetes/parov114/helm/totp_values.yaml \
             --namespace totpv114 \
             --create-namespace
 
       - name: Deploy paro
         run: |
           helm upgrade --install paro-v114 \
-            kubernetes/parov114/helm/paro-v1.14.0/helm/paro-1.22.0.tgz \
-            -f kubernetes/parov114/helm/paro_values.yaml \
-            --set-file htExtractFingerTenprint=kubernetes/parov114/helm/ext.1031.0.txt \
+            ./kubernetes/parov114/helm/paro-v1.14.0/helm/paro-1.22.0.tgz \
+            -f ./kubernetes/parov114/helm/paro_values.yaml \
+            --set-file htExtractFingerTenprint=./kubernetes/parov114/helm/ext.1031.0.txt \
             --namespace parov114 \
             --create-namespace
 
