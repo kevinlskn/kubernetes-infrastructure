@@ -1,0 +1,101 @@
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: awm
+  namespace: awm
+spec:
+  serviceName: awm
+  replicas: 1
+  selector:
+    matchLabels:
+      app: awm
+  template:
+    metadata:
+      labels:
+        app: awm
+    spec:
+      imagePullSecrets:
+        - name: regcred-neclatam
+      containers:
+      - name: awm
+        image: docker.neclatam-cloud.com/social-id/awm:7.2.10-DATAPREV
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+          - name: awm-3535
+            containerPort: 3535
+            protocol: TCP
+        env:
+        - name: TZ
+          value: America/Argentina/Buenos_Aires
+        - name: JAVA_OPTS
+          value: "-XX:MaxRAMPercentage=70"
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "1"
+          limits:
+            memory: "16Gi"
+            cpu: "8"
+
+        startupProbe:
+          tcpSocket:
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+
+        volumeMounts:
+        - name: awm-system
+          mountPath: /home/awm/awm-system
+
+  volumeClaimTemplates:
+  - metadata:
+      name: awm-system
+      namespace: awm
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+      storageClassName: oci-bv
+
+---
+
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: awm
+  namespace: awm
+spec:
+  type: ClusterIP
+  selector:
+    app: awm
+  ports:
+    - name: http-8080
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: awm-3535
+      port: 3535
+      targetPort: 3535
+      protocol: TCP
