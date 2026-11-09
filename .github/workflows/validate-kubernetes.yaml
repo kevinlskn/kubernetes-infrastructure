@@ -20,7 +20,7 @@ name: Validate Kubernetes Manifests
 
 jobs:
   validate:
-    name: Validate AWM manifests
+    name: Validate parov114 manifests
     runs-on: ubuntu-latest
 
     steps:
@@ -41,10 +41,10 @@ jobs:
           tar -xzf kubeconform.tar.gz
           sudo install kubeconform /usr/local/bin/kubeconform
 
-      - name: Build AWM manifests with Kustomize
+      - name: Build parov114 manifests with Kustomize
         run: |
-          kubectl kustomize kubernetes/parov114/awm \
-            > /tmp/awm-rendered.yaml
+          kubectl kustomize kubernetes/parov114 \
+            > /tmp/parov114-rendered.yaml
 
       - name: Validate Kubernetes schemas
         run: |
@@ -52,4 +52,4 @@ jobs:
             -strict \
             -summary \
             -kubernetes-version 1.35.0 \
-            /tmp/awm-rendered.yaml
+            /tmp/parov114-rendered.yaml
